@@ -8,108 +8,167 @@ Analyzes warranty claims with full three-level hierarchy:
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional, Any
 from collections import defaultdict
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from datetime import datetime
 
 
-@dataclass
-class LaborCode:
-    """Individual labor operation"""
-    code: str
-    description: str
-    performed: bool
-    is_optional: bool
-    labor_hours: float = 0.0
-    labor_cost: float = 0.0
-    parts_cost: float = 0.0
+class LaborCode(BaseModel):
+    """Individual labor operation with validation"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    code: str = Field(..., min_length=1, description="Labor code identifier")
+    description: str = Field(default="", description="Labor code description")
+    performed: bool = Field(..., description="Whether the labor was performed")
+    is_optional: bool = Field(default=True, description="Whether the labor is optional")
+    labor_hours: float = Field(default=0.0, ge=0, description="Hours spent on labor")
+    labor_cost: float = Field(default=0.0, ge=0, description="Cost of labor")
+    parts_cost: float = Field(default=0.0, ge=0, description="Cost of parts")
+
+    @field_validator('code')
+    @classmethod
+    def code_not_empty(cls, v: str) -> str:
+        """Validate that code is not empty or whitespace only"""
+        if not v or not v.strip():
+            raise ValueError('Labor code cannot be empty')
+        return v.strip()
 
 
-@dataclass
-class ClaimJob:
-    """Campaign/Job within a claim"""
-    job_id: str
-    campaign_code: str
-    labor_codes: List[LaborCode]
-    total_labor_hours: float = 0.0
-    total_labor_cost: float = 0.0
-    total_parts_cost: float = 0.0
-    
+class ClaimJob(BaseModel):
+    """Campaign/Job within a claim with validation"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    job_id: str = Field(..., min_length=1, description="Job identifier")
+    campaign_code: str = Field(..., min_length=1, description="Campaign code")
+    labor_codes: List[LaborCode] = Field(..., min_length=1, description="List of labor codes")
+    total_labor_hours: float = Field(default=0.0, ge=0, description="Total labor hours")
+    total_labor_cost: float = Field(default=0.0, ge=0, description="Total labor cost")
+    total_parts_cost: float = Field(default=0.0, ge=0, description="Total parts cost")
+
+    @field_validator('job_id', 'campaign_code')
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        """Validate that strings are not empty"""
+        if not v or not v.strip():
+            raise ValueError('Field cannot be empty')
+        return v.strip()
+
+    @field_validator('labor_codes')
+    @classmethod
+    def must_have_labor_codes(cls, v: List[LaborCode]) -> List[LaborCode]:
+        """Validate that job has at least one labor code"""
+        if len(v) == 0:
+            raise ValueError('Job must have at least one labor code')
+        return v
+
     @property
     def total_cost(self) -> float:
+        """Total cost (labor + parts)"""
         return self.total_labor_cost + self.total_parts_cost
-    
+
     @property
     def performed_count(self) -> int:
+        """Count of performed labor codes"""
         return sum(1 for lc in self.labor_codes if lc.performed)
-    
+
     @property
     def skipped_count(self) -> int:
+        """Count of skipped labor codes"""
         return sum(1 for lc in self.labor_codes if not lc.performed)
-    
+
     @property
     def optional_performed_count(self) -> int:
+        """Count of optional labor codes that were performed"""
         return sum(1 for lc in self.labor_codes if lc.is_optional and lc.performed)
-    
+
     @property
     def optional_skipped_count(self) -> int:
+        """Count of optional labor codes that were skipped"""
         return sum(1 for lc in self.labor_codes if lc.is_optional and not lc.performed)
 
 
-@dataclass
-class Claim:
-    """Complete claim for one vehicle visit"""
-    claim_id: str
-    vehicle_id: str
-    claim_date: pd.Timestamp
-    dealer_id: str
-    claim_jobs: List[ClaimJob]
-    
+class Claim(BaseModel):
+    """Complete claim for one vehicle visit with comprehensive validation"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    claim_id: str = Field(..., min_length=1, description="Claim identifier")
+    vehicle_id: str = Field(..., min_length=1, description="Vehicle identifier")
+    claim_date: Any = Field(..., description="Claim date (supports pd.Timestamp or datetime)")
+    dealer_id: str = Field(..., min_length=1, description="Dealer identifier")
+    claim_jobs: List[ClaimJob] = Field(..., min_length=1, description="List of jobs in claim")
+
     # Vehicle attributes
-    vehicle_make: Optional[str] = None
-    vehicle_model: Optional[str] = None
-    vehicle_year: Optional[int] = None
-    mileage: Optional[float] = None
-    
+    vehicle_make: Optional[str] = Field(default=None, description="Vehicle make")
+    vehicle_model: Optional[str] = Field(default=None, description="Vehicle model")
+    vehicle_year: Optional[int] = Field(default=None, ge=1900, le=2100, description="Vehicle year")
+    mileage: Optional[float] = Field(default=None, ge=0, le=1_000_000, description="Vehicle mileage")
+
+    @field_validator('claim_id', 'vehicle_id', 'dealer_id')
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        """Validate that strings are not empty"""
+        if not v or not v.strip():
+            raise ValueError('Field cannot be empty')
+        return v.strip()
+
+    @field_validator('claim_jobs')
+    @classmethod
+    def must_have_jobs(cls, v: List[ClaimJob]) -> List[ClaimJob]:
+        """Validate that claim has at least one job"""
+        if len(v) == 0:
+            raise ValueError('Claim must have at least one job')
+        return v
+
     @property
     def total_cost(self) -> float:
+        """Total cost across all jobs"""
         return sum(job.total_cost for job in self.claim_jobs)
-    
+
     @property
     def total_labor_hours(self) -> float:
+        """Total labor hours across all jobs"""
         return sum(job.total_labor_hours for job in self.claim_jobs)
-    
+
     @property
     def campaign_count(self) -> int:
+        """Number of campaigns/jobs in claim"""
         return len(self.claim_jobs)
-    
+
     @property
     def total_labor_codes(self) -> int:
+        """Total number of labor codes across all jobs"""
         return sum(len(job.labor_codes) for job in self.claim_jobs)
-    
+
     @property
     def total_performed(self) -> int:
+        """Total performed labor codes"""
         return sum(job.performed_count for job in self.claim_jobs)
-    
+
     @property
     def total_skipped(self) -> int:
+        """Total skipped labor codes"""
         return sum(job.skipped_count for job in self.claim_jobs)
-    
+
     @property
     def optional_performed(self) -> int:
+        """Total optional labor codes performed"""
         return sum(job.optional_performed_count for job in self.claim_jobs)
-    
+
     @property
     def optional_skipped(self) -> int:
+        """Total optional labor codes skipped"""
         return sum(job.optional_skipped_count for job in self.claim_jobs)
-    
+
     @property
     def skip_rate(self) -> float:
+        """Overall skip rate"""
         total = self.total_labor_codes
         return self.total_skipped / total if total > 0 else 0.0
-    
+
     @property
     def optional_skip_rate(self) -> float:
+        """Skip rate for optional labor codes"""
         total_optional = self.optional_performed + self.optional_skipped
         return self.optional_skipped / total_optional if total_optional > 0 else 0.0
 
@@ -121,46 +180,23 @@ class ClaimAnalyzer:
         self.claims: List[Claim] = []
         
     def load_claims(self, claims_data: List[Dict]) -> None:
-        """Load claim data from structured format"""
+        """
+        Load claim data from structured format with automatic Pydantic validation
+
+        This method now provides automatic validation of:
+        - Required fields presence
+        - Data types
+        - Value ranges (e.g., costs >= 0, vehicle_year between 1900-2100)
+        - Non-empty strings
+        - List requirements (claims must have jobs, jobs must have labor codes)
+        """
         for claim_dict in claims_data:
-            claim_jobs = []
-            
-            for job_dict in claim_dict.get('claim_jobs', []):
-                labor_codes = []
-                
-                for lc_dict in job_dict.get('labor_codes', []):
-                    labor_code = LaborCode(
-                        code=lc_dict['code'],
-                        description=lc_dict.get('description', ''),
-                        performed=lc_dict['performed'],
-                        is_optional=lc_dict.get('is_optional', True),
-                        labor_hours=lc_dict.get('labor_hours', 0.0),
-                        labor_cost=lc_dict.get('labor_cost', 0.0),
-                        parts_cost=lc_dict.get('parts_cost', 0.0)
-                    )
-                    labor_codes.append(labor_code)
-                
-                claim_job = ClaimJob(
-                    job_id=job_dict['job_id'],
-                    campaign_code=job_dict['campaign_code'],
-                    labor_codes=labor_codes,
-                    total_labor_hours=job_dict.get('total_labor_hours', 0.0),
-                    total_labor_cost=job_dict.get('total_labor_cost', 0.0),
-                    total_parts_cost=job_dict.get('total_parts_cost', 0.0)
-                )
-                claim_jobs.append(claim_job)
-            
-            claim = Claim(
-                claim_id=claim_dict['claim_id'],
-                vehicle_id=claim_dict['vehicle_id'],
-                claim_date=pd.to_datetime(claim_dict['claim_date']),
-                dealer_id=claim_dict['dealer_id'],
-                claim_jobs=claim_jobs,
-                vehicle_make=claim_dict.get('vehicle_make'),
-                vehicle_model=claim_dict.get('vehicle_model'),
-                vehicle_year=claim_dict.get('vehicle_year'),
-                mileage=claim_dict.get('mileage')
-            )
+            # Convert claim_date to pd.Timestamp if needed
+            if 'claim_date' in claim_dict and not isinstance(claim_dict['claim_date'], pd.Timestamp):
+                claim_dict['claim_date'] = pd.to_datetime(claim_dict['claim_date'])
+
+            # Pydantic will automatically validate the entire nested structure
+            claim = Claim(**claim_dict)
             self.claims.append(claim)
     
     def load_from_dataframe(self, df: pd.DataFrame) -> None:

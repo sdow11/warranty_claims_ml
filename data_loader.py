@@ -8,6 +8,7 @@ import numpy as np
 from typing import Dict, List, Optional, Union
 from pathlib import Path
 import json
+from pydantic import ValidationError
 
 
 class ClaimDataLoader:
@@ -81,6 +82,54 @@ class ClaimDataLoader:
         with open(filepath, 'r') as f:
             data = json.load(f)
         return data
+
+    @staticmethod
+    def load_and_validate_from_json(filepath: Union[str, Path]) -> List[Dict]:
+        """
+        Load claims from JSON file with Pydantic validation
+
+        This method validates the entire claim structure including:
+        - Required fields presence
+        - Data types
+        - Value ranges
+        - Nested structure integrity
+
+        Returns:
+            List of validated claim dictionaries
+
+        Raises:
+            ValidationError: If data doesn't meet validation requirements
+        """
+        from claim_analyzer import Claim
+
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        # Validate each claim using Pydantic
+        validated_claims = []
+        errors = []
+
+        for idx, claim_dict in enumerate(data):
+            try:
+                # Pydantic validation happens here
+                claim = Claim(**claim_dict)
+                # Convert back to dict for compatibility
+                validated_claims.append(claim.model_dump())
+            except ValidationError as e:
+                errors.append({
+                    'claim_index': idx,
+                    'claim_id': claim_dict.get('claim_id', 'unknown'),
+                    'errors': e.errors()
+                })
+
+        if errors:
+            print(f"Validation errors found in {len(errors)} claims:")
+            for error in errors:
+                print(f"  Claim {error['claim_id']} (index {error['claim_index']}): {error['errors']}")
+            raise ValueError(f"Failed to validate {len(errors)} claims. See errors above.")
+
+        print(f"Successfully validated {len(validated_claims)} claims")
+        return validated_claims
     
     @staticmethod
     def load_from_excel(filepath: Union[str, Path],
@@ -91,44 +140,79 @@ class ClaimDataLoader:
     
     @staticmethod
     def validate_data(df: pd.DataFrame) -> Dict[str, any]:
-        """Validate loaded data and return statistics"""
+        """
+        Validate loaded data and return statistics
+
+        This is a basic DataFrame-level validation. For comprehensive validation
+        including value ranges, nested structures, and business rules, use
+        load_and_validate_from_json() with Pydantic models.
+        """
         required_cols = [
             'claim_id', 'vehicle_id', 'claim_date', 'dealer_id',
             'job_id', 'campaign_code', 'labor_code', 'performed'
         ]
-        
+
         validation = {
             'is_valid': True,
             'missing_columns': [],
             'null_counts': {},
             'data_types': {},
-            'warnings': []
+            'warnings': [],
+            'value_errors': []
         }
-        
+
         # Check required columns
         for col in required_cols:
             if col not in df.columns:
                 validation['missing_columns'].append(col)
                 validation['is_valid'] = False
-        
+
         if not validation['is_valid']:
             return validation
-        
+
         # Check for nulls
         for col in required_cols:
             null_count = df[col].isnull().sum()
             if null_count > 0:
                 validation['null_counts'][col] = null_count
                 validation['warnings'].append(f"{col} has {null_count} null values")
-        
+
         # Check data types
         validation['data_types'] = {col: str(df[col].dtype) for col in df.columns}
-        
+
         # Check for data quality issues
         if 'performed' in df.columns:
             if not df['performed'].dtype == bool:
                 validation['warnings'].append("'performed' column should be boolean")
-        
+
+        # Pydantic-inspired value range checks
+        if 'vehicle_year' in df.columns:
+            invalid_years = df[(df['vehicle_year'] < 1900) | (df['vehicle_year'] > 2100)]['vehicle_year'].dropna()
+            if len(invalid_years) > 0:
+                validation['value_errors'].append(
+                    f"Found {len(invalid_years)} invalid vehicle years (must be 1900-2100)"
+                )
+                validation['is_valid'] = False
+
+        if 'mileage' in df.columns:
+            invalid_mileage = df[(df['mileage'] < 0) | (df['mileage'] > 1_000_000)]['mileage'].dropna()
+            if len(invalid_mileage) > 0:
+                validation['value_errors'].append(
+                    f"Found {len(invalid_mileage)} invalid mileage values (must be 0-1,000,000)"
+                )
+                validation['is_valid'] = False
+
+        # Check for negative costs
+        cost_cols = ['labor_hours', 'labor_cost', 'parts_cost']
+        for col in cost_cols:
+            if col in df.columns:
+                negative_values = df[df[col] < 0][col].dropna()
+                if len(negative_values) > 0:
+                    validation['value_errors'].append(
+                        f"Found {len(negative_values)} negative values in {col} (must be >= 0)"
+                    )
+                    validation['is_valid'] = False
+
         # Summary statistics
         validation['summary'] = {
             'total_rows': len(df),
@@ -138,7 +222,7 @@ class ClaimDataLoader:
             'unique_campaigns': df['campaign_code'].nunique(),
             'date_range': (df['claim_date'].min(), df['claim_date'].max())
         }
-        
+
         return validation
     
     @staticmethod
