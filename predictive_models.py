@@ -5,14 +5,116 @@ Predicts optional labor code performance at multiple levels
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Literal
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.preprocessing import LabelEncoder
+from pydantic import BaseModel, Field, field_validator
 import warnings
 warnings.filterwarnings('ignore')
+
+
+# Pydantic Configuration Models
+class ModelConfig(BaseModel):
+    """Configuration for machine learning models"""
+    model_type: Literal['random_forest', 'gradient_boosting', 'logistic'] = Field(
+        default='random_forest',
+        description="Type of ML model to use"
+    )
+    n_estimators: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Number of estimators for ensemble models"
+    )
+    max_depth: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum depth of trees"
+    )
+    random_state: int = Field(
+        default=42,
+        description="Random seed for reproducibility"
+    )
+    test_size: float = Field(
+        default=0.2,
+        ge=0.05,
+        le=0.5,
+        description="Proportion of data for testing"
+    )
+    cv_folds: int = Field(
+        default=5,
+        ge=2,
+        le=10,
+        description="Number of cross-validation folds"
+    )
+
+    class Config:
+        frozen = True  # Make config immutable
+
+
+class PredictionConfig(BaseModel):
+    """Configuration for prediction tasks"""
+    skip_rate_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Threshold for high skip rate classification"
+    )
+    target_column: str = Field(
+        default='optional_skip_rate',
+        description="Target column for prediction"
+    )
+    min_samples_for_training: int = Field(
+        default=10,
+        ge=5,
+        description="Minimum samples required for training"
+    )
+    enable_feature_importance: bool = Field(
+        default=True,
+        description="Whether to calculate feature importance"
+    )
+
+    class Config:
+        frozen = True
+
+
+class DataLoaderConfig(BaseModel):
+    """Configuration for data loading and processing"""
+    n_claims: int = Field(
+        default=100,
+        ge=1,
+        le=100000,
+        description="Number of claims to generate/load"
+    )
+    avg_jobs_per_claim: int = Field(
+        default=2,
+        ge=1,
+        le=20,
+        description="Average jobs per claim"
+    )
+    avg_labor_codes_per_job: int = Field(
+        default=3,
+        ge=1,
+        le=50,
+        description="Average labor codes per job"
+    )
+    optional_skip_rate: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Probability of skipping optional labor"
+    )
+    seed: int = Field(
+        default=42,
+        description="Random seed for data generation"
+    )
+
+    class Config:
+        frozen = True
 
 
 class ClaimLevelPredictor:
