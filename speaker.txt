@@ -1,0 +1,65 @@
+Speaker 1 (00:00)
+Okay, so each campaign poll, each campaign HSC CC code s CC code When when they perform around different cars, I either have mandatory operation or optional. So think of our car, it's to come in. We're going to look to see if you have that air bag. 
+
+Speaker 1 (00:20)
+If you have the air bag, then you replace it. So the checking is mandatory. The replacement is optional. 
+
+Speaker 1 (00:30)
+There's no way of you telling the dealer can just say yeah, this car had it. And change it, okay. But if you, for example, and the reason this happens is sometimes the OEM is they don't know what parts they're putting on the car. 
+
+Speaker 1 (00:46)
+But they definitely lose track of it, but if you were to I bet you're plug in the engine. If you were to look at the similar car with the same engine that they were produced exactly on the same day, all of that, you could find out that if 95% of them showed up to the dealer, and they didn't have it. They didn't need the replacement. 
+
+Speaker 1 (01:06)
+It's very likely that this one doesn't need it. Okay, and the guy's just doing it on for fun. Okay, so I thought you were trying to do so you're plugging. 
+
+Speaker 1 (01:17)
+In the configuration. The mileage Some of the things as I'm living so it's very unlikely, or if it's in California, probably he's not going to have the rust, right. If the recalls rust like go check on, lived all of its life in California, they're probably not going to have the rust, right. 
+
+Speaker 1 (01:43)
+But they have to do the inspection anyway. Because it's a recall So you put in the configuration information, you put in. The mileage, okay, then what you're trying to predict is the car needs of the optional option configuration. 
+
+Speaker 1 (01:58)
+Optional Operations Okay. So, hello, so if it was easy, it would be 10, does it. Yes, need the optional operations or not right? 
+
+Speaker 1 (02:12)
+And then in your data, you have Recall. Optional labor code optional. Yes, or no performed, yes or no right, so you can create a model that just says okay. 
+
+Speaker 1 (02:25)
+Was there an optional any any optional operations performed for this car on this campaign? Yes, or no, that would take that would say yes, but the problem is you probably have some paths. Like if the car, if you if they open it up and it's airbag a do this. 
+
+Speaker 1 (02:47)
+If it's airbag b do this, if it's airbag c do this right, and so that's why it might be better for you to do this at labor line level, say it was this labor line needed for this car. Okay, right, because it could be that this car comes in. This has. 
+
+Speaker 1 (03:03)
+This has You know, masan and airbag a, but they do the repair verbac. C on this car so it doesn't belong. Then, you can flag it as opposed to what as opposed to doing nothing or doing doing labor CI know I know, but you're saying it is better to do good labor line, as opposed to what as opposed to. 
+
+Speaker 1 (03:25)
+But let's say that it needs operation labor line a-okay, but labor line C is 5 hours labor line a is 1 hour. Okay so what they do is they actually do labor line c, and then they make the replacement for a-okay. Does that make sense? 
+
+Speaker 1 (03:43)
+Yes, yeah, okay. So then you want to know how likely is it for the to need c okay, but A Okay, so this data that you have The first thing you have to do is to take all the non mandatory. Options group by car group by recall and calculate and look at the distribution of the mandatory items like, let's say you can. 
+
+Speaker 1 (04:13)
+So those are all the messages like I put AB and C there and then I have there for you which one was performed. Okay. So you look, you see, okay. 
+
+Speaker 1 (04:20)
+There were 3. There are 3 optional operations for that car. They did 1 of it. 
+
+Speaker 1 (04:26)
+Okay so that means that you should do that labor code level. But if you do all 3 operations, and they've done 90% of it, that means that they're doing all or nothing. Most of the campaigns are kind of all or nothing. 
+
+Speaker 1 (04:38)
+Okay, right? And so then you should probably just do the easier model, which is like whether any optional operation is c. Okay, okay. 
+
+Speaker 1 (04:46)
+So you have the data in a notebooks folder. Query the data. Okay, just do this analysis on it. 
+
+Speaker 1 (04:55)
+Okay. And then create the model you have. You should have some templates on VSD because the VST model is at labor line level. 
+
+Speaker 1 (05:04)
+Okay. So you can potentially use some of the same functions and things like this. Okay And then you have to register it into ML flow and things like that. 
+
+Speaker 1 (05:15)
+Well, talk about that later. Yeah, I teach you ML is like a, you know, like every time you make a model. You're the f****** ones you king now.
