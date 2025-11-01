@@ -4,3 +4,6 @@ scikit-learn>=1.2.0
 matplotlib>=3.6.0
 seaborn>=0.12.0
 pydantic>=2.0.0
+
+# Optional: For SHAP feature importance in warranty_predictor.py
+# shap>=0.41.0
